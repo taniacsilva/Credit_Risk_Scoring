@@ -5,7 +5,10 @@ import numpy as np
 import argparse
 
 from sklearn.model_selection import train_test_split
-
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.metrics import roc_auc_score
+from sklearn.tree import export_text
 
 # Data Preparation
 
@@ -82,7 +85,7 @@ def split_train_val_test(data):
         Args:
             data (pandas.DataFrame): list that contains the explanatory variables and objective variable
             
-        Returns:
+        Return:
             set_used (list): list that contains x_train, x_val, x_test, y_train, y_val, y_test, x_full_train, y_full_train
     """
     # Create x variable with the explanatory variables and y variable with the objective variable
@@ -101,6 +104,55 @@ def split_train_val_test(data):
         i = i.reset_index(drop=True)
 
     return set_used
+
+
+def one_hot_enconding(set_used_x, set_used_y):
+    """This function performs one hot encoding to categorical variables
+    Args:
+        set_used_x (list) : list with explanatory variables
+        set_used_y (list) : list with objective variable
+        
+    Return:
+        X_train (Numpy Array) : Array that contains the explanatory variables one hot encoded for train dataset
+        X_val (Numpy Array) : Array that contains the explanatory variables one hot encoded for validation dataset
+        dv (sklearn.feature_extraction._dict_vectorizer.DictVectorizer) : method for one hot encoding
+    """
+    # For train dataset
+    train_dicts = set_used_x.fillna(0).to_dict(orient="records") # filling na values with 0
+    dv = DictVectorizer(sparse=False)
+    X_train = dv.fit_transform(train_dicts)
+
+    # For validation dataset
+    val_dicts = set_used_y.fillna(0).to_dict(orient="records")
+    X_val = dv.transform(val_dicts) # Validation datased is not fitted because it was already fitted for train dataset
+
+    return X_train, X_val, dv
+
+
+def decision_tree_model (X_train, X_val, set_used):
+    """This function trains this logistic regression model and get the predictions
+        Args:
+            X_train (Numpy Array) : Array that contains the explanatory variables one hot encoded for train dataset
+            X_val (Numpy Array) : Array that contains the explanatory variables one hot encoded for validation dataset
+            set_used (list) : list that contains x_train, x_val, x_test, y_train, y_val, y_test, x_full_train, y_full_train
+        Return:
+            model (sklearn.linear_model._logistic.LogisticRegression) : Logistic regression model trained
+            churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
+                                            has a probability to churn higher than 0.5 and, otherwise False
+    """    
+    model = DecisionTreeClassifier(max_depth=3)
+    model.fit(X_train, set_used)
+
+    #Predict (Hard Predictions - Train Dataset)
+    model.predict(X_train)
+
+    #Predict (Soft Predictions - Validation Dataset)
+    y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+
+    #Predictions
+    churn_decision = (y_pred >= 0.5)
+
+    return model, churn_decision, y_pred
 
 
 def parse_arguments():
@@ -127,6 +179,17 @@ def main():
 
     set_used = split_train_val_test(data)
 
+    X_train, X_val, dv = one_hot_enconding(set_used[0], set_used[1])
+
+    # Learning in Train data and Evaluates in Val Data
+    model, churn_decision, y_pred = decision_tree_model (X_train, X_val, set_used[3])
+    print ("auc val:", roc_auc_score(set_used[4],y_pred))
+
+    # Learning in Train data and Evaluates in Train Data
+    model, churn_decision, y_pred = decision_tree_model (X_train, X_train, set_used[3])
+    print ("auc train:", roc_auc_score(set_used[3],y_pred))
+
+    print(export_text(model))  # to be improved
 
 if __name__ == "__main__":
     main()
