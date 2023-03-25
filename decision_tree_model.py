@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 import argparse
+import seaborn as sns
 
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
@@ -139,20 +140,93 @@ def decision_tree_model (X_train, X_val, set_used):
             model (sklearn.linear_model._logistic.LogisticRegression) : Logistic regression model trained
             churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
                                             has a probability to churn higher than 0.5 and, otherwise False
+            y_pred (Numpy Array) : array that contains the predictions obtained from the model
     """    
-    model = DecisionTreeClassifier(max_depth=3)
-    model.fit(X_train, set_used)
+    for d in [1, 2, 3, 4, 5, 6, 10, 15, 20, None]:
+        model = DecisionTreeClassifier(max_depth=3)
+        model.fit(X_train, set_used)
 
-    #Predict (Hard Predictions - Train Dataset)
-    model.predict(X_train)
+        #Predict (Hard Predictions - Train Dataset)
+        model.predict(X_train)
 
-    #Predict (Soft Predictions - Validation Dataset)
-    y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+        #Predict (Soft Predictions - Validation Dataset)
+        y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
 
-    #Predictions
-    churn_decision = (y_pred >= 0.5)
+        #Predictions
+        churn_decision = (y_pred >= 0.5)
 
+        
     return model, churn_decision, y_pred
+
+
+def decision_tree_model_tunning_depth (X_train, X_val, set_used, Y_val):
+    """This function trains this logistic regression model and get the predictions
+        Args:
+            X_train (Numpy Array) : Array that contains the explanatory variables one hot encoded for train dataset
+            X_val (Numpy Array) : Array that contains the explanatory variables one hot encoded for validation dataset
+            set_used (list) : list that contains x_train, x_val, x_test, y_train, y_val, y_test, x_full_train, y_full_train
+        Return:
+            model (sklearn.linear_model._logistic.LogisticRegression) : Logistic regression model trained
+            churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
+                                            has a probability to churn higher than 0.5 and, otherwise False
+            y_pred (Numpy Array) : array that contains the predictions obtained from the model
+    """    
+    for d in [1, 2, 3, 4, 5, 6, 10, 15, 20, None]:
+        model = DecisionTreeClassifier(max_depth=d)
+        model.fit(X_train, set_used)
+
+        #Predict (Hard Predictions - Train Dataset)
+        model.predict(X_train)
+
+        #Predict (Soft Predictions - Validation Dataset)
+        y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+
+        #Predictions
+        churn_decision = (y_pred >= 0.5)
+
+        #AUC
+        auc = roc_auc_score(Y_val, y_pred)
+
+        print('%4s -> %.3f' %  (d, auc))
+
+
+def decision_tree_model_tunning_leaf (X_train, X_val, set_used, Y_val):
+    """This function trains this logistic regression model and get the predictions
+        Args:
+            X_train (Numpy Array) : Array that contains the explanatory variables one hot encoded for train dataset
+            X_val (Numpy Array) : Array that contains the explanatory variables one hot encoded for validation dataset
+            set_used (list) : list that contains x_train, x_val, x_test, y_train, y_val, y_test, x_full_train, y_full_train
+        Return:
+            model (sklearn.linear_model._logistic.LogisticRegression) : Logistic regression model trained
+            churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
+                                            has a probability to churn higher than 0.5 and, otherwise False
+            y_pred (Numpy Array) : array that contains the predictions obtained from the model
+    """    
+    scores = []
+
+    for d in [4, 5, 6]:
+        for s in [1, 2, 5, 10, 15, 20, 100, 200, 500]:
+            model = DecisionTreeClassifier(max_depth=d, min_samples_leaf=s)
+            model.fit(X_train, set_used)
+
+            #Predict (Hard Predictions - Train Dataset)
+            model.predict(X_train)
+
+            #Predict (Soft Predictions - Validation Dataset)
+            y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+
+            #Predictions
+            churn_decision = (y_pred >= 0.5)
+
+            #AUC
+            auc = roc_auc_score(Y_val, y_pred)
+
+            scores.append ((d, s, auc))
+
+    columns = ['max_depth', 'min_samples_leaf', 'auc']            
+    df_scores = pd.DataFrame(scores, columns=columns)
+
+    return df_scores
 
 
 def parse_arguments():
@@ -191,5 +265,15 @@ def main():
 
     print(export_text(model))  # to be improved
 
+    decision_tree_model_tunning_depth (X_train, X_val, set_used[3], set_used[4])
+
+    df_scores = decision_tree_model_tunning_leaf(X_train, X_val, set_used[3], set_used[4])
+
+    df_scores_pivot = df_scores.pivot(index = "min_samples_leaf", columns=['max_depth'], values=['auc'])
+
+    print(df_scores_pivot.round(3))
+
+    sns.heatmap(df_scores_pivot, annot=True, fmt = '.3f')
+    
 if __name__ == "__main__":
     main()
