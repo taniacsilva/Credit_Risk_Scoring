@@ -140,33 +140,80 @@ def random_forest_model (X_train, X_val, set_used, Y_val):
             Y_val (Numpy Array) : Array that contains the objective variable for validation dataset
 
         Return:
-            model (sklearn.linear_model._logistic.LogisticRegression) : Logistic regression model trained
+            model (sklearn.ensemble._forest.RandomForestClassifier) : Random Forest model trained
             churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
                                             has a probability to churn higher than 0.5 and, otherwise False
             y_pred (Numpy Array) : array that contains the predictions obtained from the model
-            scores () : 
+            scores (list) : list that contains the number of estimators, and the respective accuracy of the model 
+                            that uses each number of estimators as parameter
     """    
     scores = []
+    for d in [5, 10, 15]:
+        for n in range(10, 201, 10):
+            model =  RandomForestClassifier(n_estimators=n,
+                                            max_depth=d,
+                                            random_state=1) # number of models
+            model.fit(X_train, set_used)
 
-    for n in range(10, 200, 10):
-        model =  RandomForestClassifier(n_estimators=n, random_state=1) # number of models
-        model.fit(X_train, set_used)
+            # Predict (Hard Predictions - Train Dataset)
+            model.predict(X_train)
 
-        # Predict (Hard Predictions - Train Dataset)
-        model.predict(X_train)
+            # Predict (Soft Predictions - Validation Dataset)
+            y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
 
-        # Predict (Soft Predictions - Validation Dataset)
-        y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+            # Predictions
+            churn_decision = (y_pred >= 0.5)
 
-        # Predictions
-        churn_decision = (y_pred >= 0.5)
-
-        # AUC
-        auc = roc_auc_score(Y_val, y_pred)
-        scores.append ((n, auc))
-        
+            # AUC
+            auc = roc_auc_score(Y_val, y_pred)
+            scores.append ((d, n, auc))
+            
     return model, churn_decision, y_pred, scores
     
+
+def random_forest_model_leaf (X_train, X_val, set_used, Y_val):
+    """This function trains this random forest model and get the predictions using tunning parameter, namely the combination of the best 
+        max_depth obtained by random_forest_model function with min_samples_leaf
+       
+        Args:
+            X_train (Numpy Array) : Array that contains the explanatory variables one hot encoded for train dataset
+            X_val (Numpy Array) : Array that contains the explanatory variables one hot encoded for validation dataset
+            set_used (list) : list that contains x_train, x_val, x_test, y_train, y_val, y_test, x_full_train, y_full_train
+            Y_val (Numpy Array) : Array that contains the objective variable for validation dataset
+
+        Return:
+            model (sklearn.ensemble._forest.RandomForestClassifier) : Random Forest model trained
+            churn_decision (Numpy Array) : Array that contains True if the soft predictions in the validation dataset 
+                                            has a probability to churn higher than 0.5 and, otherwise False
+            y_pred (Numpy Array) : array that contains the predictions obtained from the model
+            scores (list) : list that contains the number of estimators, and the respective accuracy of the model 
+                            that uses each number of estimators as parameter
+    """    
+    scores = []
+    for s in [1, 3, 5, 10, 50]:
+        for n in range(10, 201, 10):
+            model =  RandomForestClassifier(n_estimators=n,
+                                            max_depth=10,
+                                            min_samples_leaf= s,
+                                            n_jobs=-1,
+                                            random_state=1) # number of models
+            model.fit(X_train, set_used)
+
+            # Predict (Hard Predictions - Train Dataset)
+            model.predict(X_train)
+
+            # Predict (Soft Predictions - Validation Dataset)
+            y_pred = model.predict_proba(X_val)[:,1] # Only interested in second column, probability of churn
+
+            # Predictions
+            churn_decision = (y_pred >= 0.5)
+
+            # AUC
+            auc = roc_auc_score(Y_val, y_pred)
+            scores.append ((s, n, auc))
+            
+    return model, churn_decision, y_pred, scores
+
 
 def parse_arguments():
     """This function parses the argument(s) of this model
@@ -194,13 +241,35 @@ def main():
 
     X_train, X_val, dv = one_hot_enconding(set_used[0], set_used[1])
 
-    # Learning in Train data and Evaluates in Val Data
+    # Learning in Train data and Evaluates in Val Data and Depth Parameter Tunning
     model, churn_decision, y_pred, scores = random_forest_model (X_train, X_val, set_used[3], set_used[4])
-    df_scores = pd.DataFrame(scores, columns=['n_estimators', 'auc'])
+    columns = ['max_depth','n_estimators', 'auc']
+    df_scores = pd.DataFrame(scores, columns=columns)
     
-    print(type(model))
-    print(type(scores))
-    plt.plot(df_scores.n_estimators, df_scores.auc)
+    for d in [5, 10, 15]:
+        df_subset = df_scores[df_scores.max_depth== d]
+        plt.plot(df_subset.n_estimators, df_subset.auc,
+                 label="max_depth=%d" % d)
+    plt.legend()
+    plt.show()
+    # The value of max_depth that seems to be the best is 10
+
+    # Learning in Train data and Evaluates in Val Data and Parameter Tunning (Combination max_depth and min_samples_leaf)
+    model, churn_decision, y_pred, scores = random_forest_model_leaf (X_train, X_val, set_used[3], set_used[4])
+    columns = ['min_samples_leaf','n_estimators', 'auc']
+    df_scores = pd.DataFrame(scores, columns=columns)
+    
+    colors = ['black', 'blue', 'orange', 'red', 'grey']
+    min_samples_leaf_values = [1, 3, 5, 10, 50]
+    for s, col in zip(min_samples_leaf_values, colors):
+        df_subset = df_scores[df_scores.min_samples_leaf== s]
+        plt.plot(df_subset.n_estimators, df_subset.auc,
+                 color = col,
+                 label="min_samples_leaf=%s" % s)
+    plt.legend()
+    plt.show()
+    # The value of min_samples_leaf that seems to be the best is 3
+
 
 if __name__ == "__main__":
     main()
