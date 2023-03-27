@@ -5,6 +5,7 @@ import numpy as np
 import argparse
 import xgboost as xgb
 import contextlib
+import io
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
@@ -146,6 +147,7 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
             model ('xgboost.core.Booster') : XGBoost model trained
             y_pred (Numpy Array) : array that contains the predictions obtained from the model
             auc (integer) : integer that corresponds to the area under the curve value of the model
+            output_string () : 
     """
 
     dtrain = xgb.DMatrix(X_train, label=Y_train, feature_names=features)
@@ -153,17 +155,19 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
 
     watchlist = [(dtrain, 'train'), (dval, 'dval')]
 
-    xgb_params = {
-        'eta': 0.3,
-        'max_depth': 6,
-        'min_child_weight': 1,
-        'objective': 'binary:logistic',
-        'eval_metric': 'auc',
-        'nthread': 8, 
-        'seed': 1,
-        'verbosity': 1, 
-    }
-    model = xgb.train(xgb_params, dtrain, evals=watchlist, verbose_eval=5, num_boost_round=200)
+    captured_output = io.StringIO()
+    with contextlib.redirect_stdout(captured_output):
+        xgb_params = {
+            'eta': 0.3,
+            'max_depth': 6,
+            'min_child_weight': 1,
+            'objective': 'binary:logistic',
+            'eval_metric': 'auc',
+            'nthread': 8, 
+            'seed': 1,
+            'verbosity': 1, 
+        }
+        model = xgb.train(xgb_params, dtrain, evals=watchlist, verbose_eval=5, num_boost_round=200)
 
     # Predict (Validation Dataset)
     y_pred = model.predict(dval) 
@@ -171,8 +175,35 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
     # AUC
     auc = roc_auc_score(Y_val, y_pred)
 
-    return model, y_pred, auc
+    output_string = captured_output.getvalue()
+    
+    return model, y_pred, auc, output_string
 
+
+def parse_xgb_output(output_string):
+    """This function parses the output_string obtained.
+    
+        Args:
+            output_string () : 
+    """
+    results = []
+    tree = []
+    aucs_train = []
+    aucs_val = []
+    for line in output_string.strip().split('\n'):
+        it_line, train_line, val_line = line.split('\t')
+    
+        it = int(it_line.strip('[]'))
+        train = float(train_line.split(':')[1])
+        val = float(val_line.split(':')[1])
+
+        results.append((it,train, val))
+
+    columns = ['num_iter', 'train_auc', 'val_auc']
+    df_results = pd.DataFrame(results, columns=columns)
+    
+    return df_results
+    
 
 def parse_arguments():
     """This function parses the argument(s) of this model
@@ -202,10 +233,22 @@ def main():
 
     # Learning in Train data and Evaluates in Val Data and Depth Parameter Tunning
     features = dv.get_feature_names_out()
-    model, y_pred, auc =  xgb_model(X_train, set_used[3], features, X_val, set_used[4])
+    
+    model, y_pred, auc, output_string =  xgb_model(X_train, set_used[3], features, X_val, set_used[4])
+
+    # Obtain the output of our XGBoost model
+    df_score = parse_xgb_output(output_string)
+    print (df_score)
+    
+    # Plot the output of XGBoost, namely auc for training and validation dataset
+    plt.plot(df_score.num_iter, df_score.train_auc, label='train')
+    plt.plot(df_score.num_iter, df_score.val_auc, label='val')
+    plt.legend()
+    plt.show()
 
     # AUC
     print ("auc train:", auc)
+    
 
     
 if __name__ == "__main__":
