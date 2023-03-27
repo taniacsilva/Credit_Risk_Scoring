@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import xgboost as xgb
+import contextlib
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
@@ -150,16 +151,19 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
     dtrain = xgb.DMatrix(X_train, label=Y_train, feature_names=features)
     dval = xgb.DMatrix(X_val, label=Y_val, feature_names=features)
 
+    watchlist = [(dtrain, 'train'), (dval, 'dval')]
+
     xgb_params = {
         'eta': 0.3,
         'max_depth': 6,
         'min_child_weight': 1,
         'objective': 'binary:logistic',
+        'eval_metric': 'auc',
         'nthread': 8, 
         'seed': 1,
         'verbosity': 1, 
     }
-    model = xgb.train(xgb_params, dtrain, num_boost_round=200)
+    model = xgb.train(xgb_params, dtrain, evals=watchlist, verbose_eval=5, num_boost_round=200)
 
     # Predict (Validation Dataset)
     y_pred = model.predict(dval) 
