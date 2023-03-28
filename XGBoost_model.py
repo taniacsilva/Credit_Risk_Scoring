@@ -324,6 +324,10 @@ def main():
     scores[key_ch] = parse_xgb_output(output_string)
     print ("auc train - after parameter tuning:", auc)
 
+    # Train the model using full train dataset and evaluate the model (using test dataset)
+    X_full_train, X_test, dv = one_hot_enconding(set_used[6], set_used[2])
+    model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_full_train, set_used[7], features, X_test, set_used[5], eta, md, ch)
+    print ("auc test", auc)
 
 if __name__ == "__main__":
     main()
