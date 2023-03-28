@@ -132,7 +132,7 @@ def one_hot_enconding(set_used_x, set_used_y):
     return X_train, X_val, dv
 
 
-def xgb_model (X_train, Y_train, features, X_val, Y_val, eta, md):
+def xgb_model (X_train, Y_train, features, X_val, Y_val, eta, md, ch):
     """This function trains this XGBoost model and get the predictions
 
         Args:
@@ -161,7 +161,7 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val, eta, md):
         xgb_params = {
             'eta': eta,
             'max_depth': md,
-            'min_child_weight': 1,
+            'min_child_weight': ch,
             'objective': 'binary:logistic',
             'eval_metric': 'auc',
             'nthread': 8, 
@@ -179,10 +179,11 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val, eta, md):
     # Parameters Tuning
     key_eta = 'eta=%s' % (xgb_params['eta'])
     key_md = 'md=%s' % (xgb_params['max_depth'])
+    key_ch = 'ch=%s' % (xgb_params['min_child_weight'])
 
     output_string = captured_output.getvalue()
     
-    return model, y_pred, auc, output_string, scores, key_eta, key_md
+    return model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch
 
 
 def parse_xgb_output(output_string):
@@ -241,7 +242,8 @@ def main():
     
     eta = 0.3
     md = 6
-    model, y_pred, auc, output_string, scores, key_eta, key_md =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md)
+    ch = 1
+    model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md, ch)
 
     # Obtain the output of our XGBoost model
     df_score = parse_xgb_output(output_string)
@@ -265,7 +267,7 @@ def main():
     scores_save = {}
     etas = [0.3, 0.1, 1]
     for eta in etas:
-        model, y_pred, auc, output_string, scores, key_eta, key_md =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md)
+        model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md, ch)
         scores[key_eta] = parse_xgb_output(output_string)
         scores_save.update(scores)
 
@@ -275,15 +277,16 @@ def main():
         plt.plot(df_score.num_iter, df_score.val_auc, label=eta)
     plt.legend()
     plt.show()
+
     
     # Max_Depth
 
     scores_save = {}
-    eta = 0.1
+    eta = 0.1 # selected eta
     mds = [3, 4, 6, 10]
 
     for md in mds:
-        model, y_pred, auc, output_string, scores, key_eta, key_md =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md)
+        model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md, ch)
         scores[key_md] = parse_xgb_output(output_string)
         scores_save.update(scores)
 
@@ -295,6 +298,32 @@ def main():
     plt.ylim(0.8, 0.84)
     plt.show()
 
-    
+
+    # Min Child Weight
+
+    scores_save = {}
+    eta = 0.1
+    md = 3 # selected max depth
+    chs = [1, 10, 30]
+
+    for ch in chs:
+        model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md, ch)
+        scores[key_ch] = parse_xgb_output(output_string)
+        scores_save.update(scores)
+
+    ch_strings = ['ch=1', 'ch=10','ch=30']
+    for ch in ch_strings:
+        df_score=scores_save[ch]
+        plt.plot(df_score.num_iter, df_score.val_auc, label=ch)
+    plt.legend()
+    plt.show()
+
+    # Select the best model
+    ch = 6
+    model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta, md, ch)
+    scores[key_ch] = parse_xgb_output(output_string)
+    print ("auc train - after parameter tuning:", auc)
+
+
 if __name__ == "__main__":
     main()
