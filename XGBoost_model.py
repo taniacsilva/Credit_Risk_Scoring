@@ -132,7 +132,7 @@ def one_hot_enconding(set_used_x, set_used_y):
     return X_train, X_val, dv
 
 
-def xgb_model (X_train, Y_train, features, X_val, Y_val):
+def xgb_model (X_train, Y_train, features, X_val, Y_val, eta):
     """This function trains this XGBoost model and get the predictions
 
         Args:
@@ -155,10 +155,11 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
 
     watchlist = [(dtrain, 'train'), (dval, 'dval')]
 
+    scores={}
     captured_output = io.StringIO()
     with contextlib.redirect_stdout(captured_output):
         xgb_params = {
-            'eta': 0.3,
+            'eta': eta,
             'max_depth': 6,
             'min_child_weight': 1,
             'objective': 'binary:logistic',
@@ -175,9 +176,10 @@ def xgb_model (X_train, Y_train, features, X_val, Y_val):
     # AUC
     auc = roc_auc_score(Y_val, y_pred)
 
+    key = 'eta=%s' % (xgb_params['eta'])
     output_string = captured_output.getvalue()
     
-    return model, y_pred, auc, output_string
+    return model, y_pred, auc, output_string, scores, key
 
 
 def parse_xgb_output(output_string):
@@ -234,12 +236,15 @@ def main():
     # Learning in Train data and Evaluates in Val Data and Depth Parameter Tunning
     features = dv.get_feature_names_out()
     
-    model, y_pred, auc, output_string =  xgb_model(X_train, set_used[3], features, X_val, set_used[4])
+    eta = 0.3
+    model, y_pred, auc, output_string, scores, key =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], eta)
 
     # Obtain the output of our XGBoost model
     df_score = parse_xgb_output(output_string)
+    
     print (df_score)
     
+
     # Plot the output of XGBoost, namely auc for training and validation dataset
     plt.plot(df_score.num_iter, df_score.train_auc, label='train')
     plt.plot(df_score.num_iter, df_score.val_auc, label='val')
@@ -250,6 +255,25 @@ def main():
     print ("auc train:", auc)
     
 
+    # Parameters Tuning
 
+    # ETA - learning rate
+    scores_save = {}
+    eta = [0.3, 0.1, 1]
+    for etas in eta:
+        model, y_pred, auc, output_string, scores, key =  xgb_model(X_train, set_used[3], features, X_val, set_used[4], etas)
+        scores[key] = parse_xgb_output(output_string)
+        scores_save.update(scores)
+
+    eta_strings = ['eta=0.3', 'eta=0.1','eta=1']
+    for eta in eta_strings:
+        df_score=scores_save[eta]
+        plt.plot(df_score.num_iter, df_score.val_auc, label=eta)
+            
+    plt.legend()
+    plt.show()
+    
+
+    
 if __name__ == "__main__":
     main()
