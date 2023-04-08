@@ -15,4 +15,5 @@ features = dv.get_feature_names_out()
 model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(X_full_train, set_used[7], features, X_test, set_used[5], eta, md, ch)
 
 # Bento ML
-bentoml.xgboost.save_model("credit_risk_model", model)
+bentoml.xgboost.save_model("credit_risk_model", model, custom_objects={"dictVectorizer":dv})
+print(bentoml.xgboost.save_model("credit_risk_model", model))
