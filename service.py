@@ -1,6 +1,21 @@
 import bentoml
-from bentoml.io import JSON
 
+from bentoml.io import JSON
+from pydantic import BaseModel
+
+class CreditApplication(BaseModel):
+   seniority: int
+   home: str
+   time: int
+   age: int
+   marital: str
+   records: str
+   job: str
+   expenses: int
+   income: float
+   assets: float
+   debt: float
+   amount: int
 
 # Pull the model as model reference (it pulls all the associate metadata of the model)
 model_ref = bentoml.xgboost.get('credit_risk_model:latest')
@@ -16,8 +31,9 @@ svc = bentoml.Service('credit_risk_classifier', runners=[model_runner])
 
 
 # Define an endpoint on the BentoML service
-@svc.api(input=JSON(), output=JSON()) # decorate endpoint as in json format for input and output
-def classify(application_data):
+@svc.api(input=JSON(pydantic_model=CreditApplication), output=JSON()) # decorate endpoint as in json format for input and output
+def classify(credit_application):
+   application_data = credit_application.dict()
    # transform data from client using dictvectorizer
    vector = dv.transform(application_data)
    # make predictions using 'runner.predict.run(input)' instead of 'model.predict'
