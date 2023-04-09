@@ -1,7 +1,10 @@
 import bentoml
+import numpy as np
 
 from bentoml.io import JSON
+from bentoml.io import NumpyNdarray
 from pydantic import BaseModel
+
 
 class CreditApplication(BaseModel):
    seniority: int
@@ -31,11 +34,11 @@ svc = bentoml.Service('credit_risk_classifier', runners=[model_runner])
 
 
 # Define an endpoint on the BentoML service
-@svc.api(input=JSON(pydantic_model=CreditApplication), output=JSON()) # decorate endpoint as in json format for input and output
-def classify(credit_application):
-   application_data = credit_application.dict()
+@svc.api(input=NumpyNdarray(shape=(-1,29), dtype=np.float32, enforce_dtype= True, enforce_shape=True), output=JSON()) # decorate endpoint as in json format for input and output
+def classify(vector):
+   #application_data = credit_application.dict()
    # transform data from client using dictvectorizer
-   vector = dv.transform(application_data)
+   #vector = dv.transform(application_data)
    # make predictions using 'runner.predict.run(input)' instead of 'model.predict'
    prediction = model_runner.predict.run(vector)
                      
