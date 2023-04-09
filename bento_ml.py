@@ -17,9 +17,13 @@ model, y_pred, auc, output_string, scores, key_eta, key_md, key_ch =  xgb_model(
 # Bento ML
 bentoml.xgboost.save_model('credit_risk_model',
                             model,
-                            custom_objects={'DictVectorizer': dv})
+                            custom_objects={'DictVectorizer': dv}, signatures={ # model signatures for runner info
+                            "predict": {"batchable": True,
+                                        "batch_dim": 0}})
 
 # Model Version
 print(bentoml.xgboost.save_model('credit_risk_model',
                             model,
-                            custom_objects={'DictVectorizer': dv}))
+                            custom_objects={'DictVectorizer': dv}, signatures={ # model signatures for runner info
+                            "predict": {"batchable": True,
+                                        "batch_dim": 0}}))
